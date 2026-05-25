@@ -91,10 +91,9 @@ def _parse_article(article_xml) -> Optional[dict]:
 
     # --- keywords ---
     keywords = []
-    for kw in medline.get("KeywordList", [[]])[0]:
-        if isinstance(kw, str):
-            keywords.append(kw)
-        else:
+    kw_list = medline.get("KeywordList", [])
+    if kw_list:
+        for kw in kw_list[0]:
             keywords.append(str(kw))
 
     return {
