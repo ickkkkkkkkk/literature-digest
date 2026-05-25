@@ -17,25 +17,33 @@ def _clean_text(text: str) -> str:
     return " ".join(text.split())
 
 
+def _safe_get(obj, key, default=""):
+    """Get attribute from BioPython-parsed element (dict-like or StringElement)."""
+    if hasattr(obj, "get"):
+        return obj.get(key, default)
+    return default
+
+
 def _parse_article(article_xml) -> Optional[dict]:
     """Parse a single PubmedArticle XML element into a flat dict."""
     try:
         medline = article_xml["MedlineCitation"]
         art = medline["Article"]
         pmid = str(medline["PMID"])
-    except (KeyError, IndexError):
+    except (KeyError, IndexError, TypeError):
         return None
 
     # --- title ---
-    title = _clean_text(art.get("ArticleTitle", ""))
+    title = _clean_text(_safe_get(art, "ArticleTitle"))
 
     # --- abstract ---
     abstract_parts = []
-    abstract_elem = art.get("Abstract", {})
+    abstract_elem = _safe_get(art, "Abstract", {})
+    if not isinstance(abstract_elem, dict):
+        abstract_elem = {}
     for at in abstract_elem.get("AbstractText", []):
-        # BioPython returns StringElement for plain text, dict-like for structured
         if hasattr(at, "get"):
-            label = at.get("Label", "")
+            label = _safe_get(at, "Label")
             body = _clean_text(str(at))
         else:
             label = ""
@@ -49,8 +57,8 @@ def _parse_article(article_xml) -> Optional[dict]:
     # --- authors (first 5) ---
     authors = []
     for au in art.get("AuthorList", []):
-        last = au.get("LastName", "")
-        init = au.get("Initials", "")
+        last = _safe_get(au, "LastName")
+        init = _safe_get(au, "Initials")
         if last:
             authors.append(f"{last} {init}")
     author_str = ", ".join(authors[:5])
@@ -58,20 +66,27 @@ def _parse_article(article_xml) -> Optional[dict]:
         author_str += f" et al."
 
     # --- journal ---
-    journal_elem = art.get("Journal", {})
-    journal = _clean_text(journal_elem.get("Title", ""))
+    journal_elem = _safe_get(art, "Journal", {})
+    if not isinstance(journal_elem, dict):
+        journal_elem = {}
+    journal = _clean_text(_safe_get(journal_elem, "Title"))
 
     # --- date ---
-    pubdate_xml = journal_elem.get("JournalIssue", {}).get("PubDate", {})
-    year = pubdate_xml.get("Year", "")
-    month = pubdate_xml.get("Month", "")
-    day = pubdate_xml.get("Day", "1")
+    pubdate_xml = _safe_get(journal_elem, "JournalIssue", {})
+    if not isinstance(pubdate_xml, dict):
+        pubdate_xml = {}
+    pubdate_xml = _safe_get(pubdate_xml, "PubDate", {})
+    if not isinstance(pubdate_xml, dict):
+        pubdate_xml = {}
+    year = _safe_get(pubdate_xml, "Year")
+    month = _safe_get(pubdate_xml, "Month")
+    day = _safe_get(pubdate_xml, "Day", "1")
     pubdate = f"{year}-{month}-{day}" if year else ""
 
     # --- DOI ---
     doi = ""
     for eid in art.get("ELocationID", []):
-        if eid.get("EIdType") == "doi":
+        if _safe_get(eid, "EIdType") == "doi":
             doi = _clean_text(str(eid))
 
     # --- keywords ---
