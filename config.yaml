@@ -9,11 +9,11 @@ pubmed:
   retmax: 30                         # 每条检索式最多取回数量
   lookback_days: 2                   # 检索最近 N 天的文献
 
-# --- Anthropic Claude API (生成摘要) ---
-claude:
-  api_key: "${ANTHROPIC_API_KEY}"    # 从环境变量读取
-  model: "claude-haiku-4-5-20251001" # Haiku 够快够便宜，适合批量摘要
-  max_tokens: 800
+# --- DeepSeek API (生成摘要, OpenAI 兼容) ---
+llm:
+  api_key: "${DEEPSEEK_API_KEY}"     # 从环境变量读取
+  model: "deepseek-chat"             # DeepSeek V3, 中文好、便宜
+  max_tokens: 4096
 
 # --- 邮件推送 (QQ 邮箱 SMTP) ---
 email:

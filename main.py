@@ -5,7 +5,7 @@ Daily Literature Digest — 脊柱骨科+医学生信文献日报
 Pipeline:
   1. Search PubMed with two query sets
   2. Deduplicate against history database
-  3. Summarize new papers with Claude API
+  3. Summarize new papers with DeepSeek API
   4. Generate HTML report
   5. Email the report
 """
@@ -107,15 +107,15 @@ def main():
         print("[error] PubMed email is required. Set it in config.yaml or PUBMED_EMAIL env var.")
         sys.exit(1)
 
-    claude_api_key = cfg["claude"]["api_key"]
-    if not claude_api_key or claude_api_key.startswith("${"):
-        print("[error] ANTHROPIC_API_KEY is required. Set it via environment variable.")
+    llm_api_key = cfg["llm"]["api_key"]
+    if not llm_api_key or llm_api_key.startswith("${"):
+        print("[error] DEEPSEEK_API_KEY is required. Set it via environment variable.")
         sys.exit(1)
 
     retmax = cfg["pubmed"].get("retmax", 30)
     lookback = cfg["pubmed"].get("lookback_days", 2)
-    claude_model = cfg["claude"].get("model", "claude-haiku-4-5-20251001")
-    claude_max_tokens = cfg["claude"].get("max_tokens", 800)
+    llm_model = cfg["llm"].get("model", "deepseek-chat")
+    llm_max_tokens = cfg["llm"].get("max_tokens", 4096)
 
     # --- Date ---
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -156,12 +156,12 @@ def main():
             continue
 
         # 3. Summarize
-        print(f"[summarize] Calling Claude ({claude_model}) for {len(new_articles)} papers...")
+        print(f"[summarize] Calling DeepSeek ({llm_model}) for {len(new_articles)} papers...")
         summary = batch_summarize(
             articles=new_articles,
             source_name=source_name,
-            api_key=claude_api_key,
-            model=claude_model,
+            api_key=llm_api_key,
+            model=llm_model,
         )
         all_summaries[source_name] = summary
         print(f"[summarize] Done. Summary length: {len(summary)} chars")

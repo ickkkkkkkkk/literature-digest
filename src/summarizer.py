@@ -1,10 +1,10 @@
 """
-Claude API summarizer.
+DeepSeek API summarizer (OpenAI-compatible).
 Takes raw article data and produces structured Chinese summaries.
 """
 
 import json
-from anthropic import Anthropic
+from openai import OpenAI
 
 
 SYSTEM_PROMPT = """你是一位资深的骨科基础研究和医学生物信息学学术助手。你的任务是对以下英文学术文献生成高质量的中文摘要。
@@ -45,17 +45,17 @@ def summarize(
     articles: list[dict],
     source_name: str,
     api_key: str,
-    model: str = "claude-haiku-4-5-20251001",
-    max_tokens: int = 800,
+    model: str = "deepseek-chat",
+    max_tokens: int = 4096,
 ) -> str:
     """
-    Send articles to Claude for summarization.
+    Send articles to DeepSeek for summarization.
 
     Args:
         articles: list of article dicts
         source_name: human-readable source label (e.g. "脊柱+骨科基础研究")
-        api_key: Anthropic API key
-        model: Claude model to use
+        api_key: DeepSeek API key
+        model: DeepSeek model name
         max_tokens: max output tokens
 
     Returns:
@@ -64,10 +64,8 @@ def summarize(
     if not articles:
         return ""
 
-    # Prepare compact article data for the prompt
     articles_for_prompt = []
     for art in articles:
-        # Truncate abstract to save tokens (Haiku context is large enough but let's be safe)
         abstract = art["abstract"]
         if len(abstract) > 3000:
             abstract = abstract[:3000] + "..."
@@ -89,25 +87,28 @@ def summarize(
         articles_json=json.dumps(articles_for_prompt, ensure_ascii=False, indent=2),
     )
 
-    client = Anthropic(api_key=api_key)
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://api.deepseek.com",
+    )
 
-    message = client.messages.create(
+    response = client.chat.completions.create(
         model=model,
         max_tokens=max_tokens,
-        system=SYSTEM_PROMPT,
         messages=[
-            {"role": "user", "content": user_prompt}
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
         ],
     )
 
-    return message.content[0].text
+    return response.choices[0].message.content
 
 
 def batch_summarize(
     articles: list[dict],
     source_name: str,
     api_key: str,
-    model: str = "claude-haiku-4-5-20251001",
+    model: str = "deepseek-chat",
     batch_size: int = 15,
 ) -> str:
     """

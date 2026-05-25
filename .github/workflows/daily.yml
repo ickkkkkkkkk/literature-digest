@@ -25,7 +25,7 @@ jobs:
 
       - name: Run literature digest
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           QQ_SMTP_PASSWORD: ${{ secrets.QQ_SMTP_PASSWORD }}
           PUBMED_EMAIL: ${{ secrets.PUBMED_EMAIL }}
         run: python main.py
