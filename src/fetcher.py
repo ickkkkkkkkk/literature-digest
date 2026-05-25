@@ -33,12 +33,12 @@ def _parse_article(article_xml) -> Optional[dict]:
     abstract_parts = []
     abstract_elem = art.get("Abstract", {})
     for at in abstract_elem.get("AbstractText", []):
-        # BioPython may return StringElement (str subclass) for plain text nodes
-        if isinstance(at, str):
-            label = ""
-            body = _clean_text(at)
-        else:
+        # BioPython returns StringElement for plain text, dict-like for structured
+        if hasattr(at, "get"):
             label = at.get("Label", "")
+            body = _clean_text(str(at))
+        else:
+            label = ""
             body = _clean_text(str(at))
         if label:
             abstract_parts.append(f"**{label}**: {body}")
