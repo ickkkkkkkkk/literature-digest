@@ -52,9 +52,17 @@ def resolve_config(cfg: dict) -> dict:
 
 
 def load_config(path: str = "config.yaml") -> dict:
-    """Load and resolve config file."""
-    with open(path, "r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
+    """Load and resolve config file. Tries multiple encodings for cross-platform compat."""
+    raw = None
+    for enc in ("utf-8", "utf-16-le", "utf-16-be", "gbk"):
+        try:
+            with open(path, "r", encoding=enc) as f:
+                raw = yaml.safe_load(f)
+            break
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    if raw is None:
+        raise ValueError(f"Failed to decode config file: {path}")
     return resolve_config(raw)
 
 
