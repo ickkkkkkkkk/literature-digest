@@ -1,0 +1,82 @@
+# ============================================================
+# Literature Digest — 脊柱骨科+医学生信 每日文献摘要
+# ============================================================
+
+# --- PubMed Entrez API ---
+pubmed:
+  email: "your-email@qq.com"        # NCBI 要求提供邮箱
+  api_key: ""                        # 可选，有 key 可以提升速率到 10 req/s
+  retmax: 30                         # 每条检索式最多取回数量
+  lookback_days: 2                   # 检索最近 N 天的文献
+
+# --- Anthropic Claude API (生成摘要) ---
+claude:
+  api_key: "${ANTHROPIC_API_KEY}"    # 从环境变量读取
+  model: "claude-haiku-4-5-20251001" # Haiku 够快够便宜，适合批量摘要
+  max_tokens: 800
+
+# --- 邮件推送 (QQ 邮箱 SMTP) ---
+email:
+  enabled: true
+  smtp_host: "smtp.qq.com"
+  smtp_port: 465
+  sender: "your-email@qq.com"
+  password: "${QQ_SMTP_PASSWORD}"    # QQ 邮箱授权码，从环境变量读取
+  receiver: "your-email@qq.com"
+
+# --- 检索式 ---
+queries:
+  spine_ortho:
+    name: "脊柱+骨科基础研究"
+    # 脊柱为主(椎间盘、脊柱侧弯、脊髓损伤、椎体骨折、融合)，兼顾骨折愈合/骨关节炎/骨质疏松
+    query: >
+      (
+        "spine"[MeSH] OR "intervertebral disc"[MeSH] OR "spinal cord injury"[MeSH]
+        OR "spinal fusion"[MeSH] OR "scoliosis"[MeSH] OR "vertebral fracture"[tiab]
+        OR "spondylolisthesis"[tiab] OR "disc degeneration"[tiab]
+        OR "bone and bones"[MeSH] OR "cartilage"[MeSH] OR "fracture healing"[MeSH]
+        OR "osteogenesis"[MeSH] OR "tendon"[MeSH] OR "ligament"[MeSH]
+        OR "osteoarthritis"[MeSH] OR "osteoporosis"[MeSH]
+        OR "osteosarcoma"[MeSH] OR "chondrosarcoma"[tiab] OR "giant cell tumor"[tiab]
+      )
+      AND (
+        "molecular"[tiab] OR "mechanism"[tiab] OR "signaling"[tiab]
+        OR "stem cell"[tiab] OR "regeneration"[tiab] OR "pathway"[tiab]
+        OR "gene expression"[tiab] OR "epigenetic"[tiab] OR "autophagy"[tiab]
+        OR "apoptosis"[tiab] OR "metabolism"[tiab] OR "biomechanics"[tiab]
+        OR "biomaterial"[tiab] OR "scaffold"[tiab] OR "growth factor"[tiab]
+        OR "exosome"[tiab] OR "non-coding RNA"[tiab] OR "immunology"[tiab]
+      )
+      AND ("2025"[pdat] OR "2026"[pdat])
+
+  medical_bioinfo:
+    name: "医学+生信"
+    # 生信/计算生物学在任意医学领域的应用
+    query: >
+      (
+        "computational biology"[MeSH] OR "bioinformatics"[tiab]
+        OR "single-cell"[tiab] OR "transcriptom"[tiab] OR "genomic"[tiab]
+        OR "proteomic"[tiab] OR "metabolomic"[tiab] OR "epigenomic"[tiab]
+        OR "machine learning"[tiab] OR "deep learning"[tiab]
+        OR "artificial intelligence"[tiab] OR "neural network"[tiab]
+        OR "multi-omics"[tiab] OR "spatial transcriptom"[tiab]
+        OR "network analysis"[tiab] OR "systems biology"[tiab]
+        OR "GWAS"[tiab] OR "Mendelian randomization"[tiab]
+        OR "gene signature"[tiab] OR "prognostic model"[tiab]
+        OR "immune infiltration"[tiab] OR "drug repurposing"[tiab]
+        OR "CRISPR screen"[tiab] OR "organoid"[tiab]
+      )
+      AND (
+        "medicine"[MeSH] OR "clinical"[tiab] OR "disease"[tiab]
+        OR "patient"[tiab] OR "therapy"[tiab] OR "diagnos"[tiab]
+        OR "prognos"[tiab] OR "biomarker"[tiab] OR "cancer"[tiab]
+        OR "tumor"[tiab] OR "immune"[tiab] OR "inflammation"[tiab]
+        OR "degenerative"[tiab] OR "neurolog"[tiab] OR "cardio"[tiab]
+        OR "orthop"[tiab] OR "bone"[tiab] OR "cartilage"[tiab]
+      )
+      AND ("2025"[pdat] OR "2026"[pdat])
+
+# --- 输出 ---
+output:
+  dir: "./output"      # 报告输出目录
+  keep_days: 90        # 保留最近 90 天的报告
