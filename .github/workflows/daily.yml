@@ -2,8 +2,8 @@ name: Daily Literature Digest
 
 on:
   schedule:
-    # 每天北京时间 7:00 (UTC 23:00)
-    - cron: "0 23 * * *"
+    # 每天北京时间 5:47 AM (UTC 21:47, 奇数分钟避开整点拥堵)
+    - cron: "47 21 * * *"
   workflow_dispatch:  # 允许手动触发
 
 jobs:
