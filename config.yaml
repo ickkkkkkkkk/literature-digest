@@ -10,7 +10,7 @@ pubmed:
   lookback_days: 2                   # 检索最近 N 天的文献
 
 # --- 用户关注领域（可选，用于高亮匹配文献）---
-focus_keywords: ""    # 如: "椎间盘退变, 外泌体, 间充质干细胞, 单细胞测序"
+focus_keywords: "椎间盘退变, 外泌体, 间充质干细胞, 髓核细胞, 单细胞测序, 空间转录组"
 
 # --- DeepSeek API (生成摘要, OpenAI 兼容) ---
 llm:
