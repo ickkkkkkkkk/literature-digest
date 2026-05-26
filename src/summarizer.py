@@ -60,31 +60,88 @@ def _build_articles_json(articles: list[dict]) -> list[dict]:
     return slim
 
 
-def _parse_json_lines(text: str) -> list[dict]:
-    """Parse newline-delimited JSON objects from LLM response."""
-    results = []
-    for line in text.strip().split("\n"):
-        line = line.strip()
-        if not line:
-            continue
-        # Handle possible comma suffix from LLM
-        if line.endswith(","):
-            line = line[:-1]
+def _parse_json_response(text: str) -> list[dict]:
+    """Robustly parse JSON from LLM response — handles NDJSON, JSON array, code fences."""
+    if not text:
+        return []
+
+    # Strip code fences
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        # Remove opening ```json or ```
+        end_of_first = cleaned.find("\n")
+        if end_of_first != -1:
+            cleaned = cleaned[end_of_first + 1:]
+        # Remove closing ```
+        if cleaned.rstrip().endswith("```"):
+            cleaned = cleaned.rstrip()[:-3]
+
+    cleaned = cleaned.strip()
+
+    # Try 1: JSON array [{...}, {...}]
+    if cleaned.startswith("["):
         try:
-            obj = json.loads(line)
-            if isinstance(obj, dict) and "pmid" in obj:
-                results.append(obj)
+            arr = json.loads(cleaned)
+            if isinstance(arr, list):
+                return [obj for obj in arr if isinstance(obj, dict) and "pmid" in obj]
         except json.JSONDecodeError:
-            # Try to salvage: find the outermost {}
-            start = line.find("{")
-            end = line.rfind("}")
-            if start != -1 and end != -1 and end > start:
-                try:
-                    obj = json.loads(line[start:end + 1])
-                    if isinstance(obj, dict) and "pmid" in obj:
-                        results.append(obj)
-                except json.JSONDecodeError:
+            pass
+
+    # Try 2: Single object with embedded array (e.g. {"papers": [...]})
+    if cleaned.startswith("{"):
+        try:
+            obj = json.loads(cleaned)
+            if isinstance(obj, dict):
+                # Direct single paper
+                if "pmid" in obj:
+                    return [obj]
+                # Search all values for paper lists
+                for val in obj.values():
+                    if isinstance(val, list):
+                        papers = [v for v in val if isinstance(v, dict) and "pmid" in v]
+                        if papers:
+                            return papers
+        except json.JSONDecodeError:
+            pass
+
+    # Try 3: NDJSON — extract each {...} block via brace matching
+    results = []
+    i = 0
+    while i < len(cleaned):
+        if cleaned[i] == "{":
+            depth = 0
+            j = i
+            in_string = False
+            escape = False
+            while j < len(cleaned):
+                ch = cleaned[j]
+                if escape:
+                    escape = False
+                    j += 1
                     continue
+                if ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_string = not in_string
+                elif not in_string:
+                    if ch == "{":
+                        depth += 1
+                    elif ch == "}":
+                        depth -= 1
+                        if depth == 0:
+                            j += 1
+                            break
+                j += 1
+            try:
+                obj = json.loads(cleaned[i:j])
+                if isinstance(obj, dict) and "pmid" in obj:
+                    results.append(obj)
+            except json.JSONDecodeError:
+                pass
+            i = j
+        else:
+            i += 1
+
     return results
 
 
@@ -114,7 +171,7 @@ def summarize(
 
     response = client.chat.completions.create(
         model=model,
-        max_tokens=4096,
+        max_tokens=8192,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -122,7 +179,10 @@ def summarize(
     )
 
     raw = response.choices[0].message.content
-    return _parse_json_lines(raw)
+    print(f"[summarize] Raw response length: {len(raw)} chars, first 200: {raw[:200]}")
+    parsed = _parse_json_response(raw)
+    print(f"[summarize] Parsed {len(parsed)} papers from response")
+    return parsed
 
 
 def batch_summarize(
@@ -130,7 +190,7 @@ def batch_summarize(
     source_name: str,
     api_key: str,
     model: str = "deepseek-chat",
-    batch_size: int = 15,
+    batch_size: int = 10,
     focus_keywords: str = "",
 ) -> list[dict]:
     """Summarize articles in batches, returning concatenated JSON results."""
