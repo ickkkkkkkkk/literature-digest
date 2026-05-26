@@ -9,6 +9,9 @@ pubmed:
   retmax: 30                         # 每条检索式最多取回数量
   lookback_days: 2                   # 检索最近 N 天的文献
 
+# --- 用户关注领域（可选，用于高亮匹配文献）---
+focus_keywords: ""    # 如: "椎间盘退变, 外泌体, 间充质干细胞, 单细胞测序"
+
 # --- DeepSeek API (生成摘要, OpenAI 兼容) ---
 llm:
   api_key: "${DEEPSEEK_API_KEY}"     # 从环境变量读取

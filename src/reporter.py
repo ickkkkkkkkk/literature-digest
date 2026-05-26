@@ -1,130 +1,160 @@
 """
 HTML report generator.
-Produces a self-contained, readable daily digest page.
+Produces a clean, no-frills daily digest page.
 """
 
-from datetime import datetime
 from pathlib import Path
-
 
 CSS = """
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    max-width: 900px;
+    max-width: 860px;
     margin: 0 auto;
-    padding: 40px 20px;
-    background: #f8f9fa;
-    color: #212529;
-    line-height: 1.7;
+    padding: 32px 20px;
+    background: #fff;
+    color: #222;
+    line-height: 1.6;
 }
-h1 { font-size: 1.8em; margin-bottom: 4px; color: #1a1a2e; }
-h2 { font-size: 1.3em; margin-top: 32px; color: #16213e; border-bottom: 2px solid #0f3460; padding-bottom: 6px; }
-.date { color: #666; font-size: 0.95em; margin-bottom: 24px; }
-.stats { background: #e8f4f8; border-left: 4px solid #0f3460; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 0.95em; }
-.paper { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px 24px; margin: 16px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-.paper h3 { margin: 0 0 8px 0; font-size: 1.05em; color: #0f3460; }
-.paper .meta { color: #888; font-size: 0.85em; margin-bottom: 10px; }
-.paper .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 600; }
-.badge-must { background: #ffe0e0; color: #c0392b; }
-.badge-worth { background: #fff3cd; color: #856404; }
-.badge-skim { background: #e2e3e5; color: #383d41; }
-.badge-skip { background: #f0f0f0; color: #999; }
-.paper .link { font-size: 0.85em; }
-.paper .link a { color: #0f3460; text-decoration: none; border-bottom: 1px dotted #0f3460; }
-.paper .link a:hover { color: #e94560; border-color: #e94560; }
-.footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 0.8em; color: #aaa; text-align: center; }
-.irrelevant { opacity: 0.5; }
+h1 { font-size: 1.4em; margin-bottom: 4px; }
+.date { color: #888; font-size: 0.9em; margin-bottom: 24px; }
+
+/* ---- overview ---- */
+.overview { background: #f5f5f5; padding: 16px 20px; margin: 16px 0 28px; }
+.overview h2 { font-size: 1em; margin: 0 0 10px; }
+.overview-item { padding: 4px 0; font-size: 0.92em; border-bottom: 1px dotted #ddd; }
+.overview-item:last-child { border-bottom: none; }
+.overview .tag { font-size: 0.78em; padding: 1px 6px; font-weight: 600; }
+.tag-must { background: #ffe0e0; color: #b71c1c; }
+.tag-worth { background: #fff3cd; color: #856404; }
+
+/* ---- section ---- */
+h2.section { font-size: 1.1em; margin-top: 32px; padding-bottom: 4px; border-bottom: 2px solid #222; }
+.empty-hint { color: #999; font-size: 0.9em; }
+
+/* ---- paper card ---- */
+.card { margin: 18px 0; padding: 16px 0; border-bottom: 1px solid #eee; }
+.card:last-child { border-bottom: none; }
+.card h3 { font-size: 1em; margin: 0 0 4px; font-weight: 600; }
+.card .meta { color: #666; font-size: 0.82em; margin-bottom: 6px; }
+.card .meta a { color: #555; }
+.card .tags { margin-bottom: 6px; }
+.card .tags span { display: inline-block; font-size: 0.75em; padding: 1px 8px; margin-right: 6px; margin-bottom: 4px; border: 1px solid #ccc; }
+.tag-ev-high { border-color: #b71c1c; color: #b71c1c; font-weight: 600; }
+.tag-ev-mid { border-color: #e65100; color: #e65100; }
+.tag-ev-low { border-color: #999; color: #999; }
+.novelty { font-size: 0.9em; color: #333; margin-bottom: 4px; }
+.novelty strong { color: #b71c1c; }
+.takeaway { font-size: 0.88em; color: #444; }
+.focus-card { border-left: 3px solid #b71c1c; padding-left: 14px; }
+
+/* ---- footer ---- */
+.footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 0.78em; color: #aaa; }
 """
 
 
-def _markdown_to_html(text: str) -> str:
-    """Minimal markdown→HTML converter for the summary content."""
-    import re
-
-    lines = text.strip().split("\n")
-    html_parts = []
-    in_para = False
-
-    for line in lines:
-        stripped = line.strip()
-
-        # Separator
-        if stripped.startswith("---") and len(stripped) < 6:
-            if in_para:
-                html_parts.append("</p>")
-                in_para = False
-            # Don't render horizontal rules — they're section separators in our prompt
-            continue
-
-        # Bold
-        stripped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", stripped)
-
-        # Headings
-        if stripped.startswith("### "):
-            if in_para:
-                html_parts.append("</p>")
-                in_para = False
-            html_parts.append(f"<h4>{stripped[4:]}</h4>")
-            continue
-
-        # Star ratings
-        if "★★★" in stripped or "★★" in stripped or "★" in stripped or "❌" in stripped:
-            if in_para:
-                html_parts.append("</p>")
-                in_para = False
-            cls = "badge-must" if "★★★" in stripped else (
-                "badge-worth" if "★★" in stripped else (
-                    "badge-skim" if "★" in stripped else "badge-skip"
-                )
-            )
-            html_parts.append(f'<span class="badge {cls}">{stripped}</span>')
-            continue
-
-        # Empty line
-        if not stripped:
-            if in_para:
-                html_parts.append("</p>")
-                in_para = False
-            continue
-
-        # Regular paragraph
-        if not in_para:
-            html_parts.append("<p>")
-            in_para = True
-        else:
-            html_parts.append("<br>")
-        html_parts.append(stripped)
-
-    if in_para:
-        html_parts.append("</p>")
-
-    return "\n".join(html_parts)
+def _rating_tag(rating: str) -> str:
+    if rating == "必读":
+        return '<span class="tag tag-must">必读</span>'
+    elif rating == "值得关注":
+        return '<span class="tag tag-worth">值得关注</span>'
+    return ""
 
 
-def generate(
-    date: str,
-    spine_ortho_summary: str,
-    medical_bioinfo_summary: str,
-    stats: dict,
-    query1_name: str,
-    query2_name: str,
-) -> str:
-    """
-    Generate a complete HTML report.
+def _evidence_tag(evidence: str) -> str:
+    cls = {"高": "tag-ev-high", "中": "tag-ev-mid", "低": "tag-ev-low"}.get(evidence, "")
+    return f'<span class="{cls}">{evidence}证据</span>' if cls else ""
 
-    Args:
-        date: formatted date string (e.g. "2026-05-25")
-        spine_ortho_summary: markdown summary from Claude for spine/ortho papers
-        medical_bioinfo_summary: markdown summary from Claude for medical bioinfo papers
-        stats: dedup stats dict
-        query1_name: name of first query
-        query2_name: name of second query
 
-    Returns:
-        Complete HTML string
-    """
-    spine_html = _markdown_to_html(spine_ortho_summary)
-    bioinfo_html = _markdown_to_html(medical_bioinfo_summary)
+def _build_overview(papers: list[dict]) -> str:
+    """Build overview list: only 必读 and 值得关注 papers."""
+    worthy = [p for p in papers if p.get("rating") in ("必读", "值得关注")]
+    if not worthy:
+        return '<p style="color:#999">今日无特别推荐文献。</p>'
+
+    items = []
+    for p in worthy:
+        tag_html = _rating_tag(p.get("rating", ""))
+        novelty = p.get("novelty", "")
+        novelty_str = f" — {novelty}" if novelty and novelty != "常规更新，无特殊创新" else ""
+        items.append(
+            f'<div class="overview-item">'
+            f'{tag_html} <strong>{p.get("title_cn", p.get("title", ""))}</strong>'
+            f' <span style="color:#888;font-size:0.82em">[{p.get("specialty", "")} · {p.get("study_type", "")}]</span>'
+            f'{novelty_str}'
+            f'</div>'
+        )
+
+    return "\n".join(items)
+
+
+def _build_cards(papers: list[dict]) -> str:
+    """Build full-detail cards for all papers."""
+    if not papers:
+        return '<p class="empty-hint">今日无新文献或全部已读过。</p>'
+
+    cards = []
+    for p in papers:
+        is_focus = p.get("is_focus", False)
+        focus_cls = "focus-card" if is_focus else ""
+
+        # Title
+        title_cn = p.get("title_cn", "") or p.get("title", "")
+        title_en = p.get("title", "")
+
+        # Meta line
+        authors = p.get("authors", "")
+        journal = p.get("journal", "")
+        doi = p.get("doi", "")
+        pmid = p.get("pmid", "")
+        url = p.get("url", f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/") if pmid else ""
+        meta_parts = [journal, authors]
+        meta_str = " · ".join(p for p in meta_parts if p)
+        if url:
+            meta_str += f' · <a href="{url}">PubMed</a>'
+        if doi:
+            meta_str += f' · DOI: {doi}'
+
+        # Tags
+        tags = []
+        specialty = p.get("specialty", "")
+        study_type = p.get("study_type", "")
+        evidence = p.get("evidence", "")
+        if specialty:
+            tags.append(f"<span>{specialty}</span>")
+        if study_type:
+            tags.append(f"<span>{study_type}</span>")
+        if evidence:
+            tags.append(_evidence_tag(evidence))
+
+        # Novelty
+        novelty = p.get("novelty", "")
+        novelty_html = ""
+        if novelty and novelty != "常规更新，无特殊创新":
+            novelty_html = f'<div class="novelty"><strong>创新点：</strong>{novelty}</div>'
+
+        # Takeaway
+        takeaway = p.get("takeaway", "")
+        takeaway_html = f'<div class="takeaway">{takeaway}</div>' if takeaway else ""
+
+        # Rating badge
+        rating_html = _rating_tag(p.get("rating", ""))
+
+        cards.append(f"""<div class="card {focus_cls}">
+<h3>{rating_html} {title_cn}</h3>
+<div style="color:#888;font-size:0.82em">{title_en}</div>
+<div class="meta">{meta_str}</div>
+<div class="tags">{' '.join(tags)}</div>
+{novelty_html}
+{takeaway_html}
+</div>""")
+
+    return "\n".join(cards)
+
+
+def generate(date: str, papers: list[dict], stats: dict) -> str:
+    """Generate complete HTML report from merged paper dicts."""
+    overview_html = _build_overview(papers)
+    cards_html = _build_cards(papers)
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -137,27 +167,21 @@ def generate(
 <body>
 
 <h1>骨科+生信文献日报</h1>
-<p class="date">{date} · 由 Claude 自动生成 · 基于 PubMed 数据</p>
+<p class="date">{date} · PubMed · DeepSeek 摘要生成</p>
 
-<div class="stats">
-  <strong>统计</strong><br>
-  数据库累计追踪：{stats['total']} 篇文献 · 今日新增：{stats.get('today_new', '—')} 篇
+<div class="overview">
+<h2>今日推荐</h2>
+{overview_html}
 </div>
 
-<h2>脊柱+骨科基础研究</h2>
-<div class="content">
-{spine_html if spine_html else '<p>今日无新文献或全部已读过。</p>'}
+<div style="margin-top:12px;color:#888;font-size:0.82em">
+累计追踪 {stats['total']} 篇 · 今日新增 {stats.get('today_new', 0)} 篇
 </div>
 
-<h2>医学+生物信息学</h2>
-<div class="content">
-{bioinfo_html if bioinfo_html else '<p>今日无新文献或全部已读过。</p>'}
-</div>
+<h2 class="section">全部文献</h2>
+{cards_html}
 
-<div class="footer">
-  自动生成于 {date} · 数据源：PubMed · 摘要：Claude ·
-  <a href="https://github.com">项目地址</a>
-</div>
+<div class="footer">自动生成于 {date} · 数据源 PubMed</div>
 
 </body>
 </html>"""

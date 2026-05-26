@@ -5,8 +5,8 @@ Daily Literature Digest — 脊柱骨科+医学生信文献日报
 Pipeline:
   1. Search PubMed with two query sets
   2. Deduplicate against history database
-  3. Summarize new papers with DeepSeek API
-  4. Generate HTML report
+  3. Summarize new papers with DeepSeek API (structured JSON)
+  4. Generate HTML report with overview + detail cards
   5. Email the report
 """
 
@@ -84,6 +84,26 @@ def cleanup_old_reports(output_dir: str, keep_days: int) -> None:
                 pass
 
 
+def _merge(articles: list[dict], summaries: list[dict]) -> list[dict]:
+    """Merge fetcher article metadata with LLM summary JSON by PMID."""
+    summary_map = {s["pmid"]: s for s in summaries}
+    merged = []
+    for art in articles:
+        s = summary_map.get(art["pmid"], {})
+        merged.append({
+            **art,
+            "title_cn": s.get("title_cn", ""),
+            "specialty": s.get("specialty", ""),
+            "study_type": s.get("study_type", ""),
+            "evidence": s.get("evidence", ""),
+            "is_focus": s.get("is_focus", False),
+            "novelty": s.get("novelty", ""),
+            "rating": s.get("rating", ""),
+            "takeaway": s.get("takeaway", ""),
+        })
+    return merged
+
+
 def main():
     # --- Load config ---
     script_dir = Path(__file__).parent
@@ -94,8 +114,6 @@ def main():
         sys.exit(1)
 
     cfg = load_config(str(config_path))
-
-    # Change to script dir so relative paths (output/, history.db) resolve correctly
     os.chdir(str(script_dir))
 
     # --- Resolve secrets ---
@@ -115,17 +133,15 @@ def main():
     retmax = cfg["pubmed"].get("retmax", 30)
     lookback = cfg["pubmed"].get("lookback_days", 2)
     llm_model = cfg["llm"].get("model", "deepseek-chat")
-    llm_max_tokens = cfg["llm"].get("max_tokens", 4096)
+    focus_keywords = cfg.get("focus_keywords", "")
 
     # --- Date ---
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    # Beijing time for display
     beijing_now = datetime.now(timezone(timedelta(hours=8)))
     date_display = beijing_now.strftime("%Y-%m-%d")
 
-    # Track today's new count for stats
     today_new = 0
-    all_summaries = {}
+    all_papers = []
 
     # --- Process each query ---
     for query_key, query_cfg in cfg["queries"].items():
@@ -152,35 +168,35 @@ def main():
         print(f"[dedup] {len(new_articles)} new, {len(articles) - len(new_articles)} already seen")
 
         if not new_articles:
-            all_summaries[source_name] = ""
             continue
 
         # 3. Summarize
         print(f"[summarize] Calling DeepSeek ({llm_model}) for {len(new_articles)} papers...")
-        summary = batch_summarize(
+        summaries = batch_summarize(
             articles=new_articles,
             source_name=source_name,
             api_key=llm_api_key,
             model=llm_model,
+            focus_keywords=focus_keywords,
         )
-        all_summaries[source_name] = summary
-        print(f"[summarize] Done. Summary length: {len(summary)} chars")
+        print(f"[summarize] Got {len(summaries)} structured summaries")
+
+        # 4. Merge
+        merged = _merge(new_articles, summaries)
+        all_papers.extend(merged)
+
+    # --- Sort: focus papers first, then by rating ---
+    rating_order = {"必读": 0, "值得关注": 1, "可略读": 2, "不相关": 3, "": 4}
+    all_papers.sort(key=lambda p: (
+        0 if p.get("is_focus") else 1,
+        rating_order.get(p.get("rating", ""), 4),
+    ))
 
     # --- Generate report ---
     st = db_stats()
     st["today_new"] = today_new
 
-    query1_name = cfg["queries"]["spine_ortho"]["name"]
-    query2_name = cfg["queries"]["medical_bioinfo"]["name"]
-
-    html = generate_report(
-        date=date_display,
-        spine_ortho_summary=all_summaries.get(query1_name, ""),
-        medical_bioinfo_summary=all_summaries.get(query2_name, ""),
-        stats=st,
-        query1_name=query1_name,
-        query2_name=query2_name,
-    )
+    html = generate_report(date=date_display, papers=all_papers, stats=st)
 
     # --- Save ---
     output_dir = cfg.get("output", {}).get("dir", "./output")
