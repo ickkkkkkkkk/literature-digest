@@ -23,9 +23,9 @@ email:
   enabled: true
   smtp_host: "smtp.qq.com"
   smtp_port: 465
-  sender: "${QQ_SMTP_SENDER}"       # 发件人邮箱，从环境变量读取
+  sender: "${QQ_SMTP_EMAIL}"         # 发件人邮箱，从环境变量读取
   password: "${QQ_SMTP_PASSWORD}"    # QQ 邮箱授权码，从环境变量读取
-  receiver: "${QQ_SMTP_RECEIVER}"    # 收件人邮箱（不填则与发件人相同），从环境变量读取
+  # receiver 留空则默认与 sender 相同（自己发自己收）
 
 # --- 检索式 ---
 queries:

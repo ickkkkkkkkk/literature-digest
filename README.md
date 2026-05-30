@@ -38,6 +38,9 @@ pip install -r requirements.txt
 # DeepSeek API Key（用于生成中文摘要）
 export DEEPSEEK_API_KEY="sk-xxxxxxxxxxxxxxxx"
 
+# QQ 邮箱地址（发件人和收件人相同则只设这一个）
+export QQ_SMTP_EMAIL="your-email@qq.com"
+
 # QQ 邮箱 SMTP 授权码（用于发送邮件）
 export QQ_SMTP_PASSWORD="xxxxxxxxxxxxxx"
 
@@ -81,6 +84,7 @@ python main.py
 | Secret 名称 | 说明 |
 |-------------|------|
 | `DEEPSEEK_API_KEY` | DeepSeek API 密钥 |
+| `QQ_SMTP_EMAIL` | QQ 邮箱地址（同时作为发件人和收件人） |
 | `QQ_SMTP_PASSWORD` | QQ 邮箱 SMTP 授权码 |
 | `PUBMED_EMAIL` | PubMed 联系邮箱 |
 
