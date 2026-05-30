@@ -94,14 +94,17 @@ def cleanup_old_reports(output_dir: str, keep_days: int) -> None:
         return
 
     for f in out_path.glob("*.html"):
-        if f.name.endswith(".html"):
-            try:
-                file_date = datetime.strptime(f.stem, "%Y-%m-%d")
-                if file_date < cutoff:
-                    f.unlink()
-                    print(f"[cleanup] Removed old report: {f.name}")
-            except (ValueError, OSError):
-                pass
+        if not f.name.endswith(".html"):
+            continue
+        # Support both old format (2026-05-30.html) and new (标签_2026-05-30.html)
+        date_str = f.stem[-10:] if len(f.stem) >= 10 else f.stem
+        try:
+            file_date = datetime.strptime(date_str, "%Y-%m-%d")
+            if file_date < cutoff:
+                f.unlink()
+                print(f"[cleanup] Removed old report: {f.name}")
+        except (ValueError, OSError):
+            pass
 
 
 def _merge(articles: list[dict], summaries: list[dict]) -> list[dict]:
@@ -217,7 +220,8 @@ def process_user(cfg_path: str) -> None:
 
     # --- Save ---
     output_dir = cfg.get("output", {}).get("dir", f"./output/{user_name}")
-    saved_path = save_report(html, date_display, output_dir)
+    report_name = f"{label}_{date_display}"
+    saved_path = save_report(html, report_name, output_dir)
     print(f"\n[report] Saved to: {saved_path}")
 
     # --- Cleanup ---
@@ -229,10 +233,11 @@ def process_user(cfg_path: str) -> None:
     if email_cfg.get("enabled", False):
         email_password = email_cfg.get("password", "")
         if email_password and not email_password.startswith("${"):
-            print(f"[email] Sending report to {email_cfg.get('sender', '')}...")
+            print(f"[email] Sending {label} report to {email_cfg.get('sender', '')}...")
             success = send_email(
                 html_body=html,
                 date=date_display,
+                label=label,
                 smtp_host=email_cfg["smtp_host"],
                 smtp_port=email_cfg["smtp_port"],
                 sender=email_cfg["sender"],

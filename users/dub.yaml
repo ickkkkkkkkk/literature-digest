@@ -2,6 +2,8 @@
 # Literature Digest — 脊柱骨科+医学生信 每日文献摘要
 # ============================================================
 
+label: "脊柱骨科+生信"
+
 # --- PubMed Entrez API ---
 pubmed:
   email: "${PUBMED_EMAIL}"           # NCBI 要求提供邮箱，从环境变量读取

@@ -20,6 +20,7 @@ def send(
     password: str,
     receiver: str,
     max_retries: int = 3,
+    label: str = "",
 ) -> bool:
     """
     Send the daily digest via email with automatic retry on failure.
@@ -33,12 +34,14 @@ def send(
         password: SMTP password / authorization code
         receiver: recipient email address
         max_retries: maximum send attempts (default 3)
+        label: research direction label for email subject (e.g. "脊柱骨科+生信")
 
     Returns:
         True if sent successfully
     """
+    subject = f"{label} 文献日报 — {date}" if label else f"文献日报 — {date}"
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"文献日报 — {date}"
+    msg["Subject"] = subject
     msg["From"] = sender
     msg["To"] = receiver
     msg.attach(MIMEText(html_body, "html", "utf-8"))
