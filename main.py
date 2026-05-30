@@ -16,6 +16,24 @@ import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+
+def _load_dotenv() -> None:
+    """Load .env file into os.environ if it exists (no external dependency)."""
+    env_path = Path(__file__).parent / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key, val = key.strip(), val.strip().strip('"').strip("'")
+        if key and key not in os.environ:  # don't override existing env vars
+            os.environ[key] = val
+
+
+_load_dotenv()
+
 import yaml
 
 from src.fetcher import search_pubmed
