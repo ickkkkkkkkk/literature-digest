@@ -1,0 +1,40 @@
+name: Daily Literature Digest
+
+on:
+  schedule:
+    # 每天北京时间 5:47 AM (UTC 21:47, 奇数分钟避开整点拥堵)
+    - cron: "47 21 * * *"
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run literature digest
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          PUBMED_EMAIL: ${{ secrets.PUBMED_EMAIL }}
+          QQ_SMTP_SENDER: ${{ secrets.QQ_SMTP_SENDER }}
+          QQ_SMTP_PASSWORD: ${{ secrets.QQ_SMTP_PASSWORD }}
+          QQ_SMTP_RECEIVER: ${{ secrets.QQ_SMTP_RECEIVER }}
+        run: python main.py
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: literature-digest-report
+          path: output/
+          retention-days: 7

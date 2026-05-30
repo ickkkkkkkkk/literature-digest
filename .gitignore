@@ -1,0 +1,15 @@
+*.pyc
+__pycache__/
+
+# Output
+output/
+history.db
+
+# Secrets (never commit)
+.env
+config.local.yaml
+
+# IDE
+.idea/
+.vscode/
+*.swp
