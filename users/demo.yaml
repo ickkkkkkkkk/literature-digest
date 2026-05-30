@@ -1,0 +1,68 @@
+# ============================================================
+# Literature Digest — 呼吸+肿瘤基础研究 每日文献摘要（示例）
+# ============================================================
+
+# --- PubMed Entrez API ---
+pubmed:
+  email: "${PUBMED_EMAIL}"           # NCBI 要求提供邮箱，从环境变量读取
+  api_key: ""
+  retmax: 20
+  lookback_days: 2
+
+# --- 用户关注领域 ---
+focus_keywords: "非小细胞肺癌, 免疫检查点, 肿瘤微环境, EGFR, PD-L1, CAR-T, 铁死亡"
+
+# --- DeepSeek API ---
+llm:
+  api_key: "${DEEPSEEK_API_KEY}"
+  model: "deepseek-chat"
+  max_tokens: 4096
+
+# --- 邮件推送 ---
+email:
+  enabled: true
+  smtp_host: "smtp.qq.com"
+  smtp_port: 465
+  sender: "${QQ_SMTP_EMAIL}"
+  password: "${QQ_SMTP_PASSWORD}"
+
+# --- 检索式 ---
+queries:
+  lung_cancer:
+    name: "肺癌基础研究"
+    query: >
+      (
+        "lung neoplasms"[MeSH] OR "non-small cell lung cancer"[tiab]
+        OR "small cell lung cancer"[tiab] OR "lung adenocarcinoma"[tiab]
+        OR "squamous cell carcinoma"[tiab] OR "mesothelioma"[tiab]
+      )
+      AND (
+        "molecular"[tiab] OR "mechanism"[tiab] OR "signaling"[tiab]
+        OR "tumor microenvironment"[tiab] OR "immunotherapy"[tiab]
+        OR "immune checkpoint"[tiab] OR "targeted therapy"[tiab]
+        OR "drug resistance"[tiab] OR "mutation"[tiab]
+        OR "epigenetic"[tiab] OR "metastasis"[tiab]
+        OR "biomarker"[tiab] OR "exosome"[tiab]
+      )
+      AND ("2025"[pdat] OR "2026"[pdat])
+
+  respiratory:
+    name: "呼吸疾病研究"
+    query: >
+      (
+        "respiratory tract diseases"[MeSH] OR "pulmonary disease"[MeSH]
+        OR "asthma"[MeSH] OR "pulmonary fibrosis"[MeSH]
+        OR "COPD"[tiab] OR "pneumonia"[tiab]
+        OR "acute respiratory distress"[tiab]
+      )
+      AND (
+        "mechanism"[tiab] OR "inflammation"[tiab] OR "immunology"[tiab]
+        OR "microbiome"[tiab] OR "single-cell"[tiab]
+        OR "regeneration"[tiab] OR "stem cell"[tiab]
+      )
+      AND ("2025"[pdat] OR "2026"[pdat])
+
+# --- 输出 ---
+output:
+  dir: "./output/demo"
+  keep_days: 90

@@ -1,18 +1,15 @@
 """
 SQLite-backed deduplication.
-Tracks all PMIDs we've already processed so we never summarize the same paper twice.
+Tracks all PMIDs we've already processed per-user so we never summarize the same paper twice.
 """
 
 import sqlite3
 from pathlib import Path
 
 
-DB_PATH = Path(__file__).parent.parent / "history.db"
-
-
-def init_db() -> None:
+def init_db(db_path: str) -> None:
     """Create tables if they don't exist."""
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(db_path)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS seen (
             pmid TEXT PRIMARY KEY,
@@ -24,13 +21,21 @@ def init_db() -> None:
     conn.close()
 
 
-def filter_new(articles: list[dict], source: str) -> list[dict]:
+def filter_new(articles: list[dict], source: str, db_path: str = None) -> list[dict]:
     """
     Return only articles whose PMIDs we haven't seen before.
-    Inserts newly-seen PMIDs into the database.
+    Inserts newly-seen PMIDs into the per-user database.
+
+    Args:
+        articles: list of article dicts with 'pmid' key
+        source: source label for tracking
+        db_path: path to user-specific SQLite database; defaults to root history.db
     """
-    init_db()
-    conn = sqlite3.connect(str(DB_PATH))
+    if db_path is None:
+        db_path = str(Path(__file__).parent.parent / "history.db")
+
+    init_db(db_path)
+    conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 
     new_articles = []
@@ -49,10 +54,13 @@ def filter_new(articles: list[dict], source: str) -> list[dict]:
     return new_articles
 
 
-def stats() -> dict:
+def stats(db_path: str = None) -> dict:
     """Return simple stats: total tracked, by source."""
-    init_db()
-    conn = sqlite3.connect(str(DB_PATH))
+    if db_path is None:
+        db_path = str(Path(__file__).parent.parent / "history.db")
+
+    init_db(db_path)
+    conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM seen")
     total = cur.fetchone()[0]

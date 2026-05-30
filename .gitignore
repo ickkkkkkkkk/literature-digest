@@ -4,6 +4,7 @@ __pycache__/
 # Output
 output/
 history.db
+data/
 
 # Secrets (never commit)
 .env

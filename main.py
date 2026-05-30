@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-Daily Literature Digest — 脊柱骨科+医学生信文献日报
+Daily Literature Digest — 多用户文献日报
 
 Pipeline:
-  1. Search PubMed with two query sets
-  2. Deduplicate against history database
+  1. Search PubMed with configurable query sets
+  2. Deduplicate against per-user history database
   3. Summarize new papers with DeepSeek API (structured JSON)
   4. Generate HTML report with overview + detail cards
   5. Email the report
+
+Supports multi-user mode: place one YAML config per user in users/
 """
 
 import os
@@ -69,7 +71,7 @@ def resolve_config(cfg: dict) -> dict:
     return cfg
 
 
-def load_config(path: str = "config.yaml") -> dict:
+def load_config(path: str) -> dict:
     """Load and resolve config file. Tries multiple encodings for cross-platform compat."""
     raw = None
     for enc in ("utf-8", "utf-16-le", "utf-16-be", "gbk"):
@@ -122,17 +124,20 @@ def _merge(articles: list[dict], summaries: list[dict]) -> list[dict]:
     return merged
 
 
-def main():
-    # --- Load config ---
-    script_dir = Path(__file__).parent
-    config_path = script_dir / "config.yaml"
+def process_user(cfg_path: str) -> None:
+    """Run the full pipeline for a single user config."""
+    user_name = Path(cfg_path).stem
+    cfg = load_config(cfg_path)
 
-    if not config_path.exists():
-        print(f"[error] Config file not found: {config_path}")
-        sys.exit(1)
+    label = cfg.get("label", user_name)
+    print(f"\n{'#'*60}")
+    print(f"# User: {label}")
+    print(f"{'#'*60}")
 
-    cfg = load_config(str(config_path))
-    os.chdir(str(script_dir))
+    # --- DB path (per-user dedup) ---
+    db_dir = Path(cfg_path).parent.parent / "data"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    db_path = str(db_dir / f"history_{user_name}.db")
 
     # --- Resolve secrets ---
     pubmed_email = cfg["pubmed"]["email"]
@@ -140,13 +145,13 @@ def main():
     if "${PUBMED_EMAIL}" == pubmed_email or not pubmed_email or "your-email" in pubmed_email:
         pubmed_email = os.environ.get("PUBMED_EMAIL", "")
     if not pubmed_email:
-        print("[error] PubMed email is required. Set it in config.yaml or PUBMED_EMAIL env var.")
-        sys.exit(1)
+        print(f"[error] [{label}] PubMed email is required.")
+        return
 
     llm_api_key = cfg["llm"]["api_key"]
     if not llm_api_key or llm_api_key.startswith("${"):
-        print("[error] DEEPSEEK_API_KEY is required. Set it via environment variable.")
-        sys.exit(1)
+        print(f"[error] [{label}] DEEPSEEK_API_KEY is required.")
+        return
 
     retmax = cfg["pubmed"].get("retmax", 30)
     lookback = cfg["pubmed"].get("lookback_days", 2)
@@ -154,7 +159,6 @@ def main():
     focus_keywords = cfg.get("focus_keywords", "")
 
     # --- Date ---
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     beijing_now = datetime.now(timezone(timedelta(hours=8)))
     date_display = beijing_now.strftime("%Y-%m-%d")
 
@@ -166,11 +170,8 @@ def main():
         source_name = query_cfg["name"]
         query_string = query_cfg["query"]
 
-        print(f"\n{'='*60}")
-        print(f"[fetch] Searching PubMed: {source_name}")
-        print(f"{'='*60}")
+        print(f"\n[fetch] Searching PubMed: {source_name}")
 
-        # 1. Fetch
         articles = search_pubmed(
             query=query_string,
             email=pubmed_email,
@@ -180,15 +181,14 @@ def main():
         )
         print(f"[fetch] Retrieved {len(articles)} articles with abstracts")
 
-        # 2. Deduplicate
-        new_articles = filter_new(articles, source=source_name)
+        # Deduplicate (per-user database)
+        new_articles = filter_new(articles, source=source_name, db_path=db_path)
         today_new += len(new_articles)
         print(f"[dedup] {len(new_articles)} new, {len(articles) - len(new_articles)} already seen")
 
         if not new_articles:
             continue
 
-        # 3. Summarize
         print(f"[summarize] Calling DeepSeek ({llm_model}) for {len(new_articles)} papers...")
         summaries = batch_summarize(
             articles=new_articles,
@@ -199,11 +199,10 @@ def main():
         )
         print(f"[summarize] Got {len(summaries)} structured summaries")
 
-        # 4. Merge
         merged = _merge(new_articles, summaries)
         all_papers.extend(merged)
 
-    # --- Sort: focus papers first, then by rating ---
+    # --- Sort ---
     rating_order = {"必读": 0, "值得关注": 1, "可略读": 2, "不相关": 3, "": 4}
     all_papers.sort(key=lambda p: (
         0 if p.get("is_focus") else 1,
@@ -211,17 +210,17 @@ def main():
     ))
 
     # --- Generate report ---
-    st = db_stats()
+    st = db_stats(db_path=db_path)
     st["today_new"] = today_new
 
     html = generate_report(date=date_display, papers=all_papers, stats=st)
 
     # --- Save ---
-    output_dir = cfg.get("output", {}).get("dir", "./output")
+    output_dir = cfg.get("output", {}).get("dir", f"./output/{user_name}")
     saved_path = save_report(html, date_display, output_dir)
     print(f"\n[report] Saved to: {saved_path}")
 
-    # --- Cleanup old reports ---
+    # --- Cleanup ---
     keep_days = cfg.get("output", {}).get("keep_days", 90)
     cleanup_old_reports(output_dir, keep_days)
 
@@ -230,7 +229,7 @@ def main():
     if email_cfg.get("enabled", False):
         email_password = email_cfg.get("password", "")
         if email_password and not email_password.startswith("${"):
-            print("[email] Sending report...")
+            print(f"[email] Sending report to {email_cfg.get('sender', '')}...")
             success = send_email(
                 html_body=html,
                 date=date_display,
@@ -241,15 +240,49 @@ def main():
                 receiver=email_cfg.get("receiver", email_cfg["sender"]),
             )
             if success:
-                print("[email] Sent successfully")
+                print(f"[email] Sent successfully")
             else:
-                print("[email] Failed to send")
+                print(f"[email] Failed to send")
         else:
-            print("[email] Skipped: QQ_SMTP_PASSWORD not configured")
+            print(f"[email] Skipped: QQ_SMTP_PASSWORD not configured")
     else:
-        print("[email] Email disabled in config")
+        print(f"[email] Email disabled in config")
 
-    print(f"\n[done] Literature digest complete. {today_new} new papers today.")
+    print(f"\n[done] [{label}] {today_new} new papers today.")
+
+
+def main():
+    script_dir = Path(__file__).parent
+    os.chdir(str(script_dir))
+
+    # --- Discover user configs ---
+    users_dir = script_dir / "users"
+    if users_dir.is_dir():
+        configs = sorted(users_dir.glob("*.yaml"))
+    else:
+        configs = []
+
+    # Fallback: single config.yaml in root
+    if not configs:
+        root_config = script_dir / "config.yaml"
+        if root_config.exists():
+            configs = [root_config]
+
+    if not configs:
+        print("[error] No config files found. Place .yaml files in users/ or config.yaml in root.")
+        sys.exit(1)
+
+    print(f"[info] Found {len(configs)} user config(s): {[c.stem for c in configs]}")
+
+    for cfg_path in configs:
+        try:
+            process_user(str(cfg_path))
+        except Exception as e:
+            print(f"[error] Failed to process {cfg_path.stem}: {e}")
+            continue
+
+    print(f"\n{'='*60}")
+    print(f"[done] All user digests complete.")
 
 
 if __name__ == "__main__":
