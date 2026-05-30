@@ -26,8 +26,10 @@ jobs:
       - name: Run literature digest
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          QQ_SMTP_PASSWORD: ${{ secrets.QQ_SMTP_PASSWORD }}
           PUBMED_EMAIL: ${{ secrets.PUBMED_EMAIL }}
+          QQ_SMTP_SENDER: ${{ secrets.QQ_SMTP_SENDER }}
+          QQ_SMTP_PASSWORD: ${{ secrets.QQ_SMTP_PASSWORD }}
+          QQ_SMTP_RECEIVER: ${{ secrets.QQ_SMTP_RECEIVER }}
         run: python main.py
 
       - name: Upload report artifact
